@@ -1,0 +1,35 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local agent/editor state
+.agents/
+.claude/
+.codex/
+skills-lock.json
+.vscode/
+.idea/
+
+# Runtime and temporary files
+*.log
+*.tmp
+*.cache
+Thumbs.db
+.DS_Store
+
+# User-uploaded content (keep directory protection files)
+uploads/*
+!uploads/.htaccess
+!uploads/notices/
+!uploads/students/
+uploads/notices/*
+uploads/students/*
+!uploads/notices/.htaccess
+!uploads/students/.htaccess
+
+# Composer / vendor libraries (install per-server with `composer install`)
+vendor/
+
+# Production deploy bundle (regenerated from this repo, not stored in it)
+build/

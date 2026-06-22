@@ -1,0 +1,15 @@
+# Disable PHP execution in uploads/
+<FilesMatch "\.(php|php3|php4|php5|php7|phtml|phar)$">
+    Require all denied
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Treat everything else as static
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+Options -ExecCGI -Indexes
+AddType text/plain .php .php3 .php4 .php5 .php7 .phtml .phar

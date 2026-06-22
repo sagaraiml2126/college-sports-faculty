@@ -1,0 +1,15 @@
+# College Sports Faculty Portal — root .htaccess
+Options -Indexes
+
+# Block direct access to internal folders
+RedirectMatch 403 ^/college-sports-faculty/includes/.*$
+RedirectMatch 403 ^/college-sports-faculty/sql/.*$
+
+# Force trailing-slash consistency
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # nothing yet — placeholder
+</IfModule>
+
+# Default character set
+AddDefaultCharset UTF-8
