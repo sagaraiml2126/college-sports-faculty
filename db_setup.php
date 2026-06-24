@@ -57,6 +57,53 @@ if (!hash_equals($expected, $given)) {
 
 header('Content-Type: text/plain; charset=utf-8');
 
+// DigitalOcean managed MySQL clusters ship with only `defaultdb`. We need
+// to connect to it first, create csf_portal, then reconnect.
+$dbName = DB_NAME;
+
+// One-off connection to `defaultdb` (always present on DO managed MySQL)
+// so we can check for + create csf_portal without going through the
+// db() singleton (which calls exit() on connection failure).
+echo "==> connecting to defaultdb (server-level) ...\n";
+$tmp = mysqli_init();
+if ($tmp === false) {
+    echo "FAILED to init mysqli\n"; exit(1);
+}
+$use_ssl = (APP_ENV !== 'local') || getenv('DB_SSL') === 'true';
+if ($use_ssl) {
+    @mysqli_ssl_set($tmp, null, null, null, null, null);
+}
+$sslFlag = defined('MYSQLI_CLIENT_SSL') ? MYSQLI_CLIENT_SSL : 0;
+$ok = mysqli_real_connect(
+    $tmp, DB_HOST, DB_USER, DB_PASS, 'defaultdb', DB_PORT, null, $sslFlag
+);
+if (!$ok) {
+    echo "FAILED to connect to defaultdb: " . mysqli_connect_error() . "\n";
+    exit(1);
+}
+echo "    OK\n";
+
+// Does csf_portal exist?
+$exists = mysqli_query($tmp, "SHOW DATABASES LIKE '$dbName'");
+$row = $exists ? mysqli_fetch_row($exists) : null;
+if ($exists instanceof mysqli_result) mysqli_free_result($exists);
+if (!$row) {
+    echo "==> csf_portal does not exist. Creating it ...\n";
+    $createSql = "CREATE DATABASE `$dbName` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
+    if (!mysqli_query($tmp, $createSql)) {
+        echo "FAILED to create $dbName: " . mysqli_error($tmp) . "\n";
+        exit(1);
+    }
+    echo "    OK — created $dbName\n";
+} else {
+    echo "==> csf_portal already exists.\n";
+}
+mysqli_close($tmp);
+
+// Now the regular db() connection to csf_portal will succeed.
+$conn = db();
+echo "==> connected to " . DB_NAME . "\n";
+
 // SHOW TABLES does not accept LIMIT — use db_select and inspect first row.
 // (db_one() auto-appends LIMIT 1, which fails on SHOW statements.)
 $check = db_select("SHOW TABLES LIKE 'students'");
