@@ -26,6 +26,12 @@
 
 declare(strict_types=1);
 
+// Force display of all errors during setup, regardless of APP_ENV.
+// The whole point of this one-time script is to surface the cause.
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/includes/bootstrap.php';
 
 /* ---------------- token gate ---------------- */
