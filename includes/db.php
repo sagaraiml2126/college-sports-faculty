@@ -11,12 +11,89 @@ declare(strict_types=1);
 /* ---------------- configuration ---------------- */
 
 // Prefer app-specific DB_* variables, then Railway's native MySQL variables,
-// and finally the local XAMPP defaults.
-if (!defined('DB_HOST'))  define('DB_HOST',  getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: '127.0.0.1');
-if (!defined('DB_USER'))  define('DB_USER',  getenv('DB_USER') ?: getenv('MYSQLUSER') ?: 'root');
-if (!defined('DB_PASS'))  define('DB_PASS',  getenv('DB_PASS') ?: getenv('MYSQLPASSWORD') ?: '');
-if (!defined('DB_NAME'))  define('DB_NAME',  getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: 'csf_portal');
-if (!defined('DB_PORT'))  define('DB_PORT',  (int)(getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: 3306));
+// then a composite DATABASE_URL (DigitalOcean App Platform binding), and
+// finally the local XAMPP defaults.
+//
+// In production (APP_ENV=production) we refuse to fall back to XAMPP defaults
+// because that would silently try to connect to a non-existent local MySQL
+// (Connection refused) instead of failing loudly with a clear configuration
+// error. Falling back to localhost in production is a foot-gun.
+$isLocal = (getenv('APP_ENV') === 'local') || (getenv('APP_ENV') === false);
+
+if ($isLocal) {
+    if (!defined('DB_HOST'))  define('DB_HOST',  getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: '127.0.0.1');
+    if (!defined('DB_USER'))  define('DB_USER',  getenv('DB_USER') ?: getenv('MYSQLUSER') ?: 'root');
+    if (!defined('DB_PASS'))  define('DB_PASS',  getenv('DB_PASS') ?: getenv('MYSQLPASSWORD') ?: '');
+    if (!defined('DB_NAME'))  define('DB_NAME',  getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: 'csf_portal');
+    if (!defined('DB_PORT'))  define('DB_PORT',  (int)(getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: 3306));
+} else {
+    // Production: try multiple sources for DB credentials.
+    //
+    // On DigitalOcean App Platform, env vars set via the dashboard are
+    // visible via $_SERVER and $_ENV, but NOT necessarily via getenv().
+    // Also, DO managed database bindings are often exposed as a single
+    // composite DATABASE_URL (e.g. mysql://user:pass@host:port/db?ssl-mode=REQUIRED)
+    // rather than individual DB_* vars.
+    $envLookup = function (string $key) {
+        $v = getenv($key);
+        if ($v !== false && $v !== '') return $v;
+        if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
+        if (isset($_ENV[$key])    && $_ENV[$key]    !== '') return $_ENV[$key];
+        // Try the MySQL* alias (Railway, Render, some DO setups).
+        if (strpos($key, 'DB_') === 0) {
+            $alt = 'MYSQL' . substr($key, 3);
+            $v = getenv($alt);
+            if ($v !== false && $v !== '') return $v;
+            if (isset($_SERVER[$alt]) && $_SERVER[$alt] !== '') return $_SERVER[$alt];
+            if (isset($_ENV[$alt])    && $_ENV[$alt]    !== '') return $_ENV[$alt];
+        }
+        return false;
+    };
+
+    // Source 1: individual DB_* env vars.
+    $host = $envLookup('DB_HOST');
+    $user = $envLookup('DB_USER');
+    $pass = $envLookup('DB_PASS');
+    $name = $envLookup('DB_NAME');
+    $port = $envLookup('DB_PORT');
+
+    // Source 2: composite DATABASE_URL (DO App Platform binding).
+    // Format: mysql://user:password@host:port/database?ssl-mode=REQUIRED
+    if (!$host) {
+        $url = $envLookup('DATABASE_URL');
+        if ($url && strpos($url, '${') === false && strpos($url, '://') !== false) {
+            // Only parse if the binding has been resolved (no leftover template).
+            $parts = parse_url($url);
+            if ($parts && isset($parts['host'])) {
+                $host = $parts['host'];
+                $port = isset($parts['port']) ? (int)$parts['port'] : 3306;
+                $user = $parts['user'] ?? $user;
+                $pass = $parts['pass'] ?? $pass;
+                $name = ltrim($parts['path'] ?? '', '/') ?: $name;
+            }
+        }
+    }
+
+    $missing = [];
+    foreach (['host' => 'DB_HOST', 'user' => 'DB_USER', 'name' => 'DB_NAME'] as $field => $const) {
+        if (empty(${$field})) $missing[] = $const;
+    }
+    if (!empty($missing)) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Database configuration error: missing env vars: " . implode(', ', $missing) . "\n";
+        echo "Set DB_HOST, DB_USER, DB_NAME, DB_PORT, DB_PASS as Environment Variables on the App,\n";
+        echo "OR fix the DigitalOcean managed database binding so DATABASE_URL resolves.\n";
+        echo "Currently DATABASE_URL = " . var_export($envLookup('DATABASE_URL'), true) . "\n";
+        exit;
+    }
+
+    if (!defined('DB_HOST')) define('DB_HOST', $host);
+    if (!defined('DB_USER')) define('DB_USER', $user);
+    if (!defined('DB_PASS')) define('DB_PASS', $pass ?? '');
+    if (!defined('DB_NAME')) define('DB_NAME', $name);
+    if (!defined('DB_PORT')) define('DB_PORT', (int)($port ?: 3306));
+}
 if (!defined('APP_ENV'))  define('APP_ENV',  getenv('APP_ENV')  ?: 'local'); // 'local' | 'production'
 
 /* ---------------- singleton connection ---------------- */
