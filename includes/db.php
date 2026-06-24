@@ -31,15 +31,47 @@ function db(): mysqli
         return $conn;
     }
 
-    $conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
-    if (!$conn) {
+    // Decide whether to enforce SSL before opening the socket. Managed
+    // databases (DigitalOcean, AWS RDS, etc.) reject non-SSL connections;
+    // local XAMPP/development does not support SSL out of the box.
+    $use_ssl = (APP_ENV !== 'local') || getenv('DB_SSL') === 'true';
+
+    $conn = mysqli_init();
+    if ($conn === false) {
+        http_response_code(500);
+        exit('Database connection failed (init).');
+    }
+    if ($use_ssl) {
+        // No cert pinning — use the system CA store. mysqli_ssl_set with all
+        // nulls is the documented way to ask for "any valid server cert".
+        // Some sandboxed PHP builds don't link OpenSSL into mysqli; in that
+        // case MYSQLI_CLIENT_SSL is undefined. Fall back to 0 (no SSL flag)
+        // so the connection still attempts — better to fail with a clear
+        // "Connection refused" than to fatal out on an undefined constant.
+        @mysqli_ssl_set($conn, null, null, null, null, null);
+        $sslFlag = defined('MYSQLI_CLIENT_SSL') ? MYSQLI_CLIENT_SSL : 0;
+    } else {
+        $sslFlag = 0;
+    }
+    $ok = mysqli_real_connect(
+        $conn, DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT,
+        null, $sslFlag
+    );
+    if (!$ok) {
         // Never leak credentials in the error message
         $err  = 'Database connection failed.';
+        // After mysqli_real_connect() fails, error info lives on the connection.
         $code = mysqli_connect_errno();
-        if (APP_ENV === 'local') {
-            $err .= ' (' . $code . ': ' . htmlspecialchars(mysqli_connect_error()) . ')';
+        $msg  = mysqli_connect_error();
+        // Older PHP keeps the global slot populated too; in case it doesn't,
+        // fall back to the per-conn getter so the local-env hint still works.
+        if (!$msg) {
+            $msg = mysqli_error($conn);
         }
-        error_log('[db] connect failed: ' . $code . ' ' . mysqli_connect_error());
+        if (APP_ENV === 'local') {
+            $err .= ' (' . $code . ': ' . htmlspecialchars($msg) . ')';
+        }
+        error_log('[db] connect failed: ' . $code . ' ' . $msg);
         http_response_code(500);
         exit($err);
     }
