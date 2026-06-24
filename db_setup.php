@@ -70,7 +70,38 @@ if (!empty($check)) {
 /* ---------------- run the three SQL files ---------------- */
 
 $sqlDir = __DIR__ . '/sql';
-$files  = ['schema.sql', 'seed.sql', 'seed.ready.sql'];
+$files  = [
+    // Base schema + seed data
+    'schema.sql',
+    'seed.sql',
+    'seed.ready.sql',
+    // All migrations in version order
+    'migration-v2.sql',
+    'migration-v3.sql',
+    'migration-v4.sql',
+    'migration-v5.sql',
+    'migration-v6-docs.sql',
+    'migration-v7-dpharm-docs.sql',
+    'migration-v8-fix-document-names.sql',
+    'migration-v9-final-teams.sql',
+    'migration-v10-student-mother-name.sql',
+    'migration-v11-student-roll-no.sql',
+    'migration-v12-transfer-pharmacy.sql',
+    'migration-v13-jersey.sql',
+    'migration-v14-fix-faculty-departments.sql',
+    'migration-v15-rename-pharmacy.sql',
+    'migration-v16-add-ytc-pharmacy.sql',
+    'migration-v18-consolidate-management.sql',
+    'migration-v19-form-submitted-at.sql',
+    'migration-v20-enrollment-nullable.sql',
+    'migration-v21-has-played-in-college.sql',
+    'migration-v22-game-catalog.sql',
+    'migration-v23-eng-pharm-game-catalog.sql',
+    'migration-v24-mgmt-arch-games.sql',
+    'migration-v26-pdf-only-docs.sql',
+    'migration-v27-passport-photo.sql',
+    'migration_student_auth.sql',
+];
 
 $conn = db(); // fresh handle, charset already set in db()
 
