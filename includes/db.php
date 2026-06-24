@@ -155,8 +155,10 @@ function db_one(string $sql, array $params = [], ?string $types = null): ?array
 {
     // Strip trailing whitespace + semicolons before checking for a LIMIT clause,
     // so a query that already ends in LIMIT 1 doesn't get a second one appended.
+    // SHOW/DESCRIBE/EXPLAIN statements don't accept LIMIT — skip the append for them.
     $trimmed = rtrim(trim($sql), ';');
-    if (!preg_match('/\bLIMIT\s+\d+/i', $trimmed)) {
+    $isMeta  = (bool)preg_match('/^\s*(SHOW|DESCRIBE|DESC|EXPLAIN)\b/i', $trimmed);
+    if (!$isMeta && !preg_match('/\bLIMIT\s+\d+/i', $trimmed)) {
         $trimmed .= ' LIMIT 1';
     }
     $rows = db_select($trimmed, $params, $types);

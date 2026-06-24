@@ -57,8 +57,10 @@ if (!hash_equals($expected, $given)) {
 
 header('Content-Type: text/plain; charset=utf-8');
 
-$check = db_one("SHOW TABLES LIKE 'students'");
-if ($check) {
+// SHOW TABLES does not accept LIMIT — use db_select and inspect first row.
+// (db_one() auto-appends LIMIT 1, which fails on SHOW statements.)
+$check = db_select("SHOW TABLES LIKE 'students'");
+if (!empty($check)) {
     echo "db_setup: students table already exists. Refusing to re-run.\n";
     echo "If you want a fresh start, DROP DATABASE first (manually) and re-run.\n";
     echo "Otherwise, delete db_setup.php from the repo and redeploy.\n";
