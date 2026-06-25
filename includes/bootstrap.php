@@ -58,7 +58,7 @@ if (session_status() === PHP_SESSION_NONE) {
         // For a college admin portal this is the right trade-off.
         'samesite' => 'Lax',
     ]);
-    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_strict_mode', '0');
     ini_set('session.gc_maxlifetime', '1800');
     session_start();
 }
