@@ -2,19 +2,13 @@
 /**
  * ONE-SHOT LIVE FIX — restore faculty_departments on the live DigitalOcean DB.
  *
- * Re-applies the same ownership rules as v14 + v16 (idempotent DELETE+INSERT),
- * so a faculty account whose department cards are missing should see them again.
+ * Re-applies the same ownership rules as v14 + v16 (idempotent DELETE+INSERT).
+ * Standalone — does NOT use bootstrap.php or auth.php, so it works whether
+ * you're logged in or not, and isn't tripped by the seed-check output buffer.
  *
  * Usage:
- *   1. Upload this file to the live site root.
- *   2. Open  https://sportsfacultyyashoda-b38g9.ondigitalocean.app/db_fix_live_depts.php
- *      while logged in as a SUPER_ADMIN (so the page is allowed).
- *   3. Read the output. The script deletes itself on success.
- *
- * Safety:
- *   - Reads the current state first (so you see the "before").
- *   - Wraps the whole fix in a transaction; rolls back on any error.
- *   - Idempotent: re-running it leaves the same end state.
+ *   1. Open https://sportsfacultyyashoda-b38g9.ondigitalocean.app/db_fix_live_depts.php
+ *   2. Read the BEFORE / AFTER blocks. It self-deletes on success.
  */
 
 declare(strict_types=1);
@@ -23,57 +17,107 @@ error_reporting(E_ALL);
 
 header('Content-Type: text/plain; charset=utf-8');
 
-require_once __DIR__ . '/includes/bootstrap.php';
+/* ---------------- direct DB connect (no bootstrap) ---------------- */
 
-// Gate: only SUPER_ADMIN (or no login at all, if the live site is misconfigured).
-$f = current_faculty();
-if ($f && $f['role'] !== 'SUPER_ADMIN') {
-    http_response_code(403);
-    echo "Forbidden: must be SUPER_ADMIN to run this script.\n";
-    exit;
+$isLocal = (getenv('APP_ENV') === 'local') || (getenv('APP_ENV') === false);
+
+$envLookup = function (string $key) {
+    $v = getenv($key);
+    if ($v !== false && $v !== '') return $v;
+    if (isset($_SERVER[$key]) && $_SERVER[$key] !== '') return $_SERVER[$key];
+    if (isset($_ENV[$key])    && $_ENV[$key]    !== '') return $_ENV[$key];
+    if (strpos($key, 'DB_') === 0) {
+        $alt = 'MYSQL' . substr($key, 3);
+        $v = getenv($alt);
+        if ($v !== false && $v !== '') return $v;
+        if (isset($_SERVER[$alt]) && $_SERVER[$alt] !== '') return $_SERVER[$alt];
+        if (isset($_ENV[$alt])    && $_ENV[$alt]    !== '') return $_ENV[$alt];
+    }
+    return false;
+};
+
+$host = $envLookup('DB_HOST');
+$user = $envLookup('DB_USER');
+$pass = $envLookup('DB_PASS');
+$name = $envLookup('DB_NAME');
+$port = $envLookup('DB_PORT');
+
+if (!$host) {
+    $url = $envLookup('DATABASE_URL');
+    if ($url && strpos($url, '${') === false && strpos($url, '://') !== false) {
+        $parts = parse_url($url);
+        if ($parts && isset($parts['host'])) {
+            $host = $parts['host'];
+            $port = isset($parts['port']) ? (int)$parts['port'] : 3306;
+            $user = $parts['user'] ?? $user;
+            $pass = $parts['pass'] ?? $pass;
+            $name = ltrim($parts['path'] ?? '', '/') ?: $name;
+        }
+    }
 }
 
-echo "db_fix_live_depts: live DB = " . h(db_host_info()) . "\n\n";
+echo "db_fix_live_depts: starting\n";
+echo "  host=" . ($host ?: '(missing)') . "  port=" . (int)($port ?: 3306) . "  db=" . ($name ?: '(missing)') . "\n";
+echo "  app_env=" . ($isLocal ? 'local' : 'production') . "\n\n";
 
-// ---------- BEFORE ----------
+if (!$host || !$user || !$name) {
+    http_response_code(500);
+    echo "FATAL: missing DB_HOST / DB_USER / DB_NAME env vars.\n";
+    echo "Set them in the App Platform dashboard, or fix the DATABASE_URL binding.\n";
+    exit(1);
+}
+
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+try {
+    $conn = new mysqli($host, $user, $pass ?? '', $name, (int)($port ?: 3306));
+} catch (mysqli_sql_exception $e) {
+    http_response_code(500);
+    echo "FATAL: cannot connect to DB: " . $e->getMessage() . "\n";
+    exit(1);
+}
+$conn->set_charset('utf8mb4');
+echo "  connected OK\n\n";
+
+/* ---------------- BEFORE ---------------- */
+
 echo "=== BEFORE: faculty_departments ===\n";
-$before = db_select(
+$res = $conn->query(
     'SELECT fd.faculty_id, fd.department_id, f.username, d.code, d.is_active
        FROM faculty_departments fd
        JOIN faculty f ON f.id = fd.faculty_id
        JOIN departments d ON d.id = fd.department_id
       ORDER BY f.username, d.code'
 );
-if (!$before) {
+if (!$res || $res->num_rows === 0) {
     echo "  (no rows)\n";
 } else {
-    foreach ($before as $r) {
+    while ($r = $res->fetch_assoc()) {
         printf("  %-15s -> %-14s  active=%d\n",
             $r['username'], $r['code'], $r['is_active']);
     }
 }
 
 echo "\n=== Active departments (codes that should appear) ===\n";
-$active = db_select('SELECT code, name FROM departments WHERE is_active = 1 ORDER BY display_order');
-foreach ($active as $d) {
-    printf("  %-14s  %s\n", $d['code'], $d['name']);
+$res = $conn->query('SELECT code, name FROM departments WHERE is_active = 1 ORDER BY display_order');
+while ($r = $res->fetch_assoc()) {
+    printf("  %-14s  %s\n", $r['code'], $r['name']);
 }
 
-// ---------- FIX ----------
+/* ---------------- FIX ---------------- */
+
 echo "\n=== Applying fix (v14 + v16 ownership rules) ===\n";
 
 try {
-    db()->begin_transaction();
+    $conn->begin_transaction();
 
-    // v14 + v16: clear existing mappings for the canonical 4 seed users.
-    db()->exec(
+    $conn->query(
         "DELETE fd FROM faculty_departments fd
            JOIN faculty f ON f.id = fd.faculty_id
           WHERE f.username IN ('eng_faculty','poly_faculty','pharm_faculty','dpharm_faculty')"
     );
+    $deleted = $conn->affected_rows;
 
-    // Re-insert the intended ownership.
-    $rows = db()->exec(
+    $conn->query(
         "INSERT INTO faculty_departments (faculty_id, department_id)
          SELECT f.id, d.id
            FROM faculty f
@@ -82,37 +126,41 @@ try {
              OR (f.username = 'poly_faculty'  AND d.code IN ('polytechnic', 'dpharm'))
              OR (f.username = 'pharm_faculty' AND d.code IN ('management', 'architecture'))"
     );
+    $inserted = $conn->affected_rows;
 
-    db()->commit();
-    echo "  inserted rows: $rows\n";
-} catch (Throwable $e) {
-    db()->rollBack();
-    echo "  FAILED: " . $e->getMessage() . "\n";
+    $conn->commit();
+    echo "  deleted $deleted old rows, inserted $inserted new rows\n";
+} catch (mysqli_sql_exception $e) {
+    $conn->rollback();
+    http_response_code(500);
+    echo "  FAILED (rolled back): " . $e->getMessage() . "\n";
     exit(1);
 }
 
-// ---------- AFTER ----------
+/* ---------------- AFTER ---------------- */
+
 echo "\n=== AFTER: faculty_departments ===\n";
-$after = db_select(
+$res = $conn->query(
     'SELECT fd.faculty_id, fd.department_id, f.username, d.code, d.is_active
        FROM faculty_departments fd
        JOIN faculty f ON f.id = fd.faculty_id
        JOIN departments d ON d.id = fd.department_id
       ORDER BY f.username, d.code'
 );
-if (!$after) {
-    echo "  (no rows — something is wrong with the faculty table)\n";
+if ($res->num_rows === 0) {
+    echo "  (no rows — the faculty table may be empty)\n";
 } else {
-    foreach ($after as $r) {
+    while ($r = $res->fetch_assoc()) {
         printf("  %-15s -> %-14s  active=%d\n",
             $r['username'], $r['code'], $r['is_active']);
     }
 }
 
-echo "\nDone. Open faculty-select.php and the cards should be back.\n";
+$conn->close();
+
+echo "\nDone. faculty-select.php should now show the cards again.\n";
 echo "Self-deleting this file in 2s...\n";
 
-// Self-delete so the URL can't be re-abused.
 sleep(2);
 @unlink(__FILE__);
 echo "Deleted.\n";
