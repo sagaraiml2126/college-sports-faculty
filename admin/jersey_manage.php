@@ -93,6 +93,11 @@ if ($form) {
 /* ------------------------------------------------------------------ */
 
 [$scope, $sp, $st] = scope_sql_department('s');
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$visible = faculty_visible_student_filter('s');
+$scope  .= $visible[0];
+$sp      = array_merge($sp, $visible[1]);
+$st     .= $visible[2];
 $team_count = (int)(db_one(
     "SELECT COUNT(*) AS n FROM final_teams ft
        JOIN students s ON s.id = ft.student_id

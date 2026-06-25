@@ -227,6 +227,19 @@ function scope_sql_department(string $alias = 's'): array
 }
 
 /**
+ * Predicate fragment that hides students who haven't completed the wizard.
+ * Use on every faculty read query that touches `students` so that
+ * half-typed drafts (created at registration but not yet submitted via
+ * student_dashboard_process.php?finalize=1) don't leak into faculty
+ * dashboards, search, or exports. Mirrors the shape of
+ * scope_sql_department() so the splice idioms below are uniform.
+ */
+function faculty_visible_student_filter(string $alias = 's'): array
+{
+    return [" AND {$alias}.form_submitted_at IS NOT NULL ", [], ''];
+}
+
+/**
  * Verify a POSTed department_id matches the effective scope.
  * Reject with 403 if not. Used by student_save.php.
  */

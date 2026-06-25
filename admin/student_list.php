@@ -21,6 +21,11 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $per  = 12;
 
 [$scope, $params, $types] = scope_sql_department('s');
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$visible = faculty_visible_student_filter('s');
+$scope  .= $visible[0];
+$params  = array_merge($params, $visible[1]);
+$types  .= $visible[2];
 
 $where = '1=1 ' . $scope;
 if ($q !== '') {

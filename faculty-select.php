@@ -57,7 +57,9 @@ $flash = flash_get('dept_error');
 if ($f['role'] === 'SUPER_ADMIN') {
     $departments = db_select(
         'SELECT d.id, d.code, d.name, d.full_name, d.icon, d.display_order,
-                (SELECT COUNT(*) FROM students s WHERE s.department_id = d.id) AS student_count
+                (SELECT COUNT(*) FROM students s
+                  WHERE s.department_id = d.id
+                    AND s.form_submitted_at IS NOT NULL) AS student_count
            FROM departments d
           WHERE d.is_active = 1
           ORDER BY d.display_order, d.name'
@@ -65,7 +67,9 @@ if ($f['role'] === 'SUPER_ADMIN') {
 } else {
     $departments = db_select(
         'SELECT d.id, d.code, d.name, d.full_name, d.icon, d.display_order,
-                (SELECT COUNT(*) FROM students s WHERE s.department_id = d.id) AS student_count
+                (SELECT COUNT(*) FROM students s
+                  WHERE s.department_id = d.id
+                    AND s.form_submitted_at IS NOT NULL) AS student_count
            FROM departments d
            JOIN faculty_departments fd ON fd.department_id = d.id
           WHERE fd.faculty_id = ? AND d.is_active = 1

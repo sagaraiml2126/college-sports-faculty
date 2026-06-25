@@ -51,6 +51,7 @@ $rows = db_select(
        JOIN students s ON s.id = jr.student_id
       WHERE jr.jersey_form_id = ?
         AND jr.status = 'Approved'
+        AND s.form_submitted_at IS NOT NULL
       ORDER BY COALESCE(jr.final_number, jr.preferred_number) ASC",
     [(int)$form['id']], 'i'
 );

@@ -36,6 +36,11 @@ $has_list = ($game !== '' && $event !== '');
 
 // ---- distinct game names (from final_teams) ----
 [$gscope, $gp, $gt] = scope_sql_department('s');
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$visible = faculty_visible_student_filter('s');
+$gscope .= $visible[0];
+$gp      = array_merge($gp, $visible[1]);
+$gt     .= $visible[2];
 $existing_games = db_select(
     "SELECT DISTINCT ft.game_name
        FROM final_teams ft
@@ -62,6 +67,11 @@ $saved_lists = db_select(
 $list_rows = [];
 if ($has_list) {
     [$lscope, $lp, $lt] = scope_sql_department('s');
+    // Hide wizard drafts (students who registered but haven't hit Final Submit).
+    $visible = faculty_visible_student_filter('s');
+    $lscope .= $visible[0];
+    $lp      = array_merge($lp, $visible[1]);
+    $lt     .= $visible[2];
     $list_rows = db_select(
         "SELECT ft.id AS entry_id, ft.roll_no, ft.created_at,
                 s.id, s.enrollment_no, s.full_name,
@@ -86,6 +96,11 @@ $search_total = 0;
 $search_pages = 1;
 if ($has_list) {
     [$sscope, $sp, $st] = scope_sql_department('s');
+    // Hide wizard drafts (students who registered but haven't hit Final Submit).
+    $visible = faculty_visible_student_filter('s');
+    $sscope .= $visible[0];
+    $sp      = array_merge($sp, $visible[1]);
+    $st     .= $visible[2];
     $where    = "1=1 $sscope";
     $params   = $sp;
     $types    = $st;

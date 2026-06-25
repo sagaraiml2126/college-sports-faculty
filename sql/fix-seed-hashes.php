@@ -32,6 +32,7 @@ $users = [
     ['username' => 'eng_faculty',   'password' => 'Faculty@123'],
     ['username' => 'poly_faculty',  'password' => 'Faculty@123'],
     ['username' => 'pharm_faculty', 'password' => 'Faculty@123'],
+    ['username' => 'dpharm_faculty','password' => 'Faculty@123'],
 ];
 
 $conn->query("UPDATE faculty SET updated_at = NOW() WHERE 0"); // warm up

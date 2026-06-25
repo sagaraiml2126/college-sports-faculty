@@ -122,11 +122,21 @@ if ($old) unset($_SESSION['_register_old']);
                     </div>
 
                     <div class="form-group">
-                        <label for="middle_name">Middle Name</label>
-                        <input type="text" id="middle_name" name="middle_name"
-                               maxlength="60"
-                               placeholder="(optional) e.g. Vinod"
+                        <label for="middle_name">Middle Name *</label>
+                        <input type="text" id="middle_name" name="middle_name" required
+                               minlength="1" maxlength="60"
+                               placeholder="e.g. Vinod"
                                value="<?= h($old['middle_name'] ?? '') ?>">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="gender">Gender *</label>
+                        <select id="gender" name="gender" required>
+                            <option value="">— Select —</option>
+                            <?php foreach (gender_options() as $g): ?>
+                                <option value="<?= h($g) ?>" <?= is_selected($g, $old['gender'] ?? '') ?>><?= h($g) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
 
                     <input type="hidden" name="full_name" id="full_name_field" value="">

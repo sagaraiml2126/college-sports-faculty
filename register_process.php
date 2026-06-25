@@ -37,8 +37,8 @@ $errors = [];
 if ($first_name === '' || strlen($first_name) > 60) {
     $errors[] = 'Please enter your first name.';
 }
-if ($middle_name !== '' && strlen($middle_name) > 60) {
-    $errors[] = 'Middle name must be at most 60 characters.';
+if ($middle_name === '' || strlen($middle_name) > 60) {
+    $errors[] = 'Please enter your middle name (max 60 characters).';
 }
 if ($surname === '' || strlen($surname) > 60) {
     $errors[] = 'Please enter your surname.';
@@ -51,6 +51,10 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 160) {
 }
 if (!preg_match('/^[0-9]{10}$/', $mobile)) {
     $errors[] = 'Mobile number must be exactly 10 digits.';
+}
+$gender = trim((string)($_POST['gender'] ?? ''));
+if ($gender === '' || !in_array($gender, gender_options(), true)) {
+    $errors[] = 'Please select your gender.';
 }
 $dob_ts = strtotime($dob);
 if (!$dob_ts || $dob_ts > time() || $dob_ts < strtotime('1990-01-01')) {
@@ -82,6 +86,7 @@ if ($errors) {
         'first_name'   => $first_name,
         'middle_name'  => $middle_name,
         'surname'      => $surname,
+        'gender'       => $gender,
         'email'        => $email,
         'mobile'       => $mobile,
         'dob'          => $dob,
@@ -105,13 +110,14 @@ $enrollment_no = null;
 try {
     $new_id = db_insert(
         'INSERT INTO students
-            (enrollment_no, full_name, dob, email, mobile, department_id,
+            (enrollment_no, full_name, dob, gender, email, mobile, department_id,
              password_hash, is_active, is_self_registered, registered_at)
-         VALUES (?,?,?,?,?,?,?,?,?,NOW())',
+         VALUES (?,?,?,?,?,?,?,?,?,?,NOW())',
         [
             $enrollment_no,
             $full_name,
             date('Y-m-d', $dob_ts),
+            $gender,
             $email,
             $mobile,
             $department_id,

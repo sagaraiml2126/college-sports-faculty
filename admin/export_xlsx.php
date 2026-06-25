@@ -34,6 +34,11 @@ $extra_types  = '';
 
 if ($is_single) {
     [$scope, $p, $t] = scope_sql_department('s');
+    // Hide wizard drafts (students who registered but haven't hit Final Submit).
+    $visible = faculty_visible_student_filter('s');
+    $scope  .= $visible[0];
+    $p       = array_merge($p, $visible[1]);
+    $t      .= $visible[2];
     $rows = db_select(
         "SELECT s.*, d.name AS dept_name
            FROM students s
@@ -47,6 +52,11 @@ if ($is_single) {
     }
 } else {
     [$scope, $p, $t] = scope_sql_department('s');
+    // Hide wizard drafts (students who registered but haven't hit Final Submit).
+    $visible = faculty_visible_student_filter('s');
+    $scope  .= $visible[0];
+    $p       = array_merge($p, $visible[1]);
+    $t      .= $visible[2];
     $params = $p;
     $types  = $t;
 

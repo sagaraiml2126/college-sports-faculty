@@ -615,24 +615,6 @@ $wizard_steps = [
                         <?= csrf_field() ?>
                         <input type="hidden" name="full_name" id="full_name_field" value="">
 
-                        <div class="section-head"><i class="bi bi-camera"></i> Passport Photo</div>
-                        <div class="photo-upload" style="margin-bottom:.5rem">
-                            <div class="photo-preview" id="photoPreview">
-                                <?php if (!empty($student['photo_path']) && is_file(__DIR__ . '/' . $student['photo_path'])): ?>
-                                    <img src="<?= h(url($student['photo_path'])) ?>" alt="">
-                                <?php else: ?>
-                                    <i class="bi bi-camera"></i>
-                                <?php endif; ?>
-                            </div>
-                            <div>
-                                <label class="photo-upload-btn">
-                                    <i class="bi bi-upload"></i> Upload Photo
-                                    <input type="file" id="photo" name="photo" accept="image/*" style="display:none">
-                                </label>
-                                <div class="hint">JPG/PNG, max 2MB, passport size</div>
-                            </div>
-                        </div>
-
                         <div class="section-head"><i class="bi bi-person-vcard"></i> Name &amp; Demographics</div>
                         <div class="form-grid">
                             <div class="form-group">
@@ -646,8 +628,8 @@ $wizard_steps = [
                                        value="<?= h($name_parts['first_name']) ?>">
                             </div>
                             <div class="form-group">
-                                <label for="middle_name">Middle Name<?= $uses_father_first_name ? ' (Father\'s First Name) *' : '' ?></label>
-                                <input type="text" id="middle_name" name="middle_name"<?= $uses_father_first_name ? ' required' : '' ?> maxlength="60"
+                                <label for="middle_name"><?= $uses_father_first_name ? "Middle Name (Father's First Name)" : 'Middle Name' ?> *</label>
+                                <input type="text" id="middle_name" name="middle_name" required maxlength="60"
                                        value="<?= h($name_parts['middle_name']) ?>"
 <?php if ($uses_father_first_name): ?>
                                        placeholder="Enter your father's first name"
@@ -673,8 +655,8 @@ $wizard_steps = [
                                 <div class="hint">If you change this, your login password also changes (to the new DOB in DDMMYYYY).</div>
                             </div>
                             <div class="form-group">
-                                <label for="gender">Gender</label>
-                                <select id="gender" name="gender">
+                                <label for="gender">Gender *</label>
+                                <select id="gender" name="gender" required>
                                     <option value="">Select</option>
                                     <?php foreach (gender_options() as $g): ?>
                                         <option value="<?= h($g) ?>" <?= is_selected($g, $student['gender'] ?? '') ?>><?= h($g) ?></option>
@@ -1257,19 +1239,6 @@ $wizard_steps = [
                 var mn = (document.getElementById('middle_name') || {}).value || '';
                 var parts = [sn, fn, mn].map(function (s) { return s.trim(); }).filter(Boolean);
                 document.getElementById('full_name_field').value = parts.join(' ');
-            });
-        }
-
-        /* Photo preview */
-        var photoInput = document.getElementById('photo');
-        var photoPreview = document.getElementById('photoPreview');
-        if (photoInput && photoPreview) {
-            photoInput.addEventListener('change', function (e) {
-                var f = e.target.files[0];
-                if (!f) return;
-                var reader = new FileReader();
-                reader.onload = function (ev) { photoPreview.innerHTML = '<img src="' + ev.target.result + '" alt="">'; };
-                reader.readAsDataURL(f);
             });
         }
 

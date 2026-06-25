@@ -46,10 +46,12 @@ if (!$is_new && $id > 0) {
 
 // Student dropdown — show all active students. department_id is intentionally
 // not filtered because achievements are a global showcase on the homepage.
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
 $students = db_select(
     "SELECT s.id, s.enrollment_no, s.full_name, d.name AS dept_name
        FROM students s
        LEFT JOIN departments d ON d.id = s.department_id
+      WHERE s.form_submitted_at IS NOT NULL
       ORDER BY s.full_name"
 );
 ?>

@@ -13,6 +13,12 @@ require_department();
 $me    = current_faculty();
 $dept  = $me['department_id'];
 $scope = scope_sql_department('s');
+$visible = faculty_visible_student_filter('s');
+// Merge the visibility filter (hide wizard drafts) into the dept scope so
+// every read query against `students` below excludes un-submitted rows.
+$scope[0] .= $visible[0];
+$scope[1] = array_merge($scope[1], $visible[1]);
+$scope[2] .= $visible[2];
 [$where, $p, $t] = $scope;
 
 // Student count (scoped)
@@ -86,6 +92,7 @@ if ($pbg_dept_id !== null) {
                   JOIN departments d ON d.id = s.department_id
                  WHERE s.department_id = ?
                    AND s.gender = ?
+                   AND s.form_submitted_at IS NOT NULL
                    AND EXISTS (
                        SELECT 1 FROM student_selected_games ssg
                         WHERE ssg.student_id = s.id AND ssg.game_code = ?

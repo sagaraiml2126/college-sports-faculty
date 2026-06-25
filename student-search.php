@@ -26,7 +26,8 @@ $view         = (string)($_GET['view'] ?? 'table');
 if (!in_array($view, ['table', 'card'], true)) $view = 'table';
 
 [$scope, $p, $t] = scope_sql_department('s');
-$where = ['1=1']; $params = []; $types = '';
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$where = ['1=1', 's.form_submitted_at IS NOT NULL']; $params = []; $types = '';
 if ($q_raw !== '') {
     $where[] = '(s.full_name LIKE ? OR s.enrollment_no LIKE ? OR s.mobile LIKE ?)';
     $like = '%' . $q_raw . '%';

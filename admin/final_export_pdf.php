@@ -33,6 +33,11 @@ require_once __DIR__ . '/../includes/engineering_eligibility_proforma_pdf.php';
 
 $me = current_faculty();
 [$scope, $params, $types] = scope_sql_department('s');
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$visible = faculty_visible_student_filter('s');
+$scope  .= $visible[0];
+$params  = array_merge($params, $visible[1]);
+$types  .= $visible[2];
 
 $rows = db_select(
     "SELECT ft.roll_no,

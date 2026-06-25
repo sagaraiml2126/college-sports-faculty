@@ -24,6 +24,11 @@ $student = null;
 $achievements = [];
 if (!$is_new && $id > 0) {
     [$scope, $p, $t] = scope_sql_department('s');
+    // Hide wizard drafts (students who registered but haven't hit Final Submit).
+    $visible = faculty_visible_student_filter('s');
+    $scope  .= $visible[0];
+    $p       = array_merge($p, $visible[1]);
+    $t      .= $visible[2];
     $student = db_one(
         "SELECT s.*, d.name AS dept_name, d.code AS department_code FROM students s
            JOIN departments d ON d.id = s.department_id

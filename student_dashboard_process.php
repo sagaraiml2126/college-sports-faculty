@@ -125,8 +125,8 @@ function handle_step_save(int $meId, int $step): void
         if (!preg_match('/^[0-9]{10}$/', $mobile)) {
             $errors[] = 'Mobile number must be exactly 10 digits.';
         }
-        if ($gender !== '' && !in_array($gender, gender_options(), true)) {
-            $errors[] = 'Invalid gender.';
+        if ($gender === '' || !in_array($gender, gender_options(), true)) {
+            $errors[] = 'Please select your gender.';
         }
         if ($blood_group !== '' && !in_array($blood_group, blood_options(), true)) {
             $errors[] = 'Invalid blood group.';
@@ -137,15 +137,11 @@ function handle_step_save(int $meId, int $step): void
         /* parent-name semantics:
            For engineering/pharmacy, the father's first name IS the middle name.
            Copy middle_name into mother_name (the column we use to store the
-           parent name) and require middle_name to be non-empty.
-           For other pharm depts (ytc_pharmacy/management/architecture), the
-           mother_name field is still captured separately. */
-        if ($uses_father_first_name) {
-            if ($middle_name === '') {
-                $errors[] = "Father's first name (middle name) is required.";
-            } else {
-                $mother_name = $middle_name;
-            }
+           parent name). Middle name is required for every department. */
+        if ($middle_name === '') {
+            $errors[] = 'Middle name is required.';
+        } elseif ($uses_father_first_name) {
+            $mother_name = $middle_name;
         }
 
         if ($errors) {
@@ -176,21 +172,6 @@ function handle_step_save(int $meId, int $step): void
             $sql .= ', password_hash = ?';
             $params[] = $new_pw_hash;
             $types   .= 's';
-        }
-
-        /* photo upload (optional) */
-        $has_photo_upload = !empty($_FILES['photo']['name']) && is_uploaded_file($_FILES['photo']['tmp_name']);
-        if ($has_photo_upload) {
-            try {
-                $up = handle_image_upload('students', $_FILES['photo']);
-                if (!$up['ok']) throw new RuntimeException('Photo upload failed: ' . $up['error']);
-                $sql .= ', photo_path = ?';
-                $params[] = $up['path'];
-                $types   .= 's';
-            } catch (Throwable $e) {
-                error_log('[student_dashboard] photo upload failed: ' . $e->getMessage());
-                flash_set('student_dashboard_err', 'Personal info saved, but photo upload failed: ' . $e->getMessage(), 'error');
-            }
         }
 
         $sql .= ', form_step = GREATEST(COALESCE(form_step, 0), 2) WHERE id = ?';
@@ -417,7 +398,7 @@ function handle_doc_upload(int $meId): void
 
     /* Verify the requirement belongs to this student's dept */
     $req = db_one(
-        'SELECT dr.id, dr.allowed_mime_types, d.id AS dept_id
+        'SELECT dr.id, dr.document_name, dr.allowed_mime_types, d.id AS dept_id
            FROM dept_document_requirements dr
            JOIN students s ON s.department_id = dr.department_id
            JOIN departments d ON d.id = dr.department_id
@@ -471,6 +452,17 @@ function handle_doc_upload(int $meId): void
         [$meId, $req_id, $up['path']], 'iis'
     );
 
+    /* If this requirement is the student's Passport-size Photo, also mirror
+       the same path into students.photo_path so faculty avatar views (which
+       read students.photo_path) keep working. The student's Step 1 no longer
+       carries a photo upload — the document requirement is the single source. */
+    if ((string)($req['document_name'] ?? '') === 'Passport-size Photo') {
+        db_execute(
+            'UPDATE students SET photo_path = ? WHERE id = ?',
+            [$up['path'], $meId], 'si'
+        );
+    }
+
     echo json_encode(['ok' => true, 'path' => $up['path']]);
 }
 
@@ -483,7 +475,10 @@ function handle_doc_delete(int $meId, int $docId): void
     header('Content-Type: application/json; charset=utf-8');
 
     $doc = db_one(
-        'SELECT id, file_path FROM student_documents WHERE id = ? AND student_id = ?',
+        'SELECT sd.id, sd.file_path, dr.document_name
+           FROM student_documents sd
+           JOIN dept_document_requirements dr ON dr.id = sd.requirement_id
+          WHERE sd.id = ? AND sd.student_id = ?',
         [$docId, $meId], 'ii'
     );
     if (!$doc) {
@@ -492,6 +487,16 @@ function handle_doc_delete(int $meId, int $docId): void
     }
     @unlink(__DIR__ . '/' . $doc['file_path']);
     db_execute('DELETE FROM student_documents WHERE id = ?', [$docId], 'i');
+
+    /* If the deleted doc was the student's Passport-size Photo, also clear
+       students.photo_path so the avatar doesn't keep showing a missing file. */
+    if ((string)($doc['document_name'] ?? '') === 'Passport-size Photo') {
+        db_execute(
+            'UPDATE students SET photo_path = NULL WHERE id = ? AND photo_path = ?',
+            [$meId, $doc['file_path']], 'is'
+        );
+    }
+
     echo json_encode(['ok' => true]);
 }
 

@@ -48,6 +48,7 @@ $achievements = db_select(
        FROM achievements a
        LEFT JOIN students  s ON s.id = a.student_id
        LEFT JOIN departments d ON d.id = s.department_id
+      WHERE s.form_submitted_at IS NOT NULL OR s.id IS NULL
       ORDER BY a.event_date DESC, a.id DESC"
 );
 

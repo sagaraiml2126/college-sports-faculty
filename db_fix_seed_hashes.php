@@ -46,6 +46,8 @@ $users = [
     ['username' => 'eng_faculty',   'password' => 'Faculty@123'],
     ['username' => 'poly_faculty',  'password' => 'Faculty@123'],
     ['username' => 'pharm_faculty', 'password' => 'Faculty@123'],
+    // dpharm_faculty was added in migration-v16 with the YTC pharmacy dept.
+    ['username' => 'dpharm_faculty','password' => 'Faculty@123'],
 ];
 
 echo "==> Updating seed-user password hashes on " . DB_NAME . "@" . DB_HOST . "\n\n";

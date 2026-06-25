@@ -35,6 +35,11 @@ $college = db_one('SELECT * FROM college_settings WHERE id = 1') ?? [
 ];
 
 [$scope, $p, $t] = scope_sql_department('s');
+// Hide wizard drafts (students who registered but haven't hit Final Submit).
+$visible = faculty_visible_student_filter('s');
+$scope  .= $visible[0];
+$p       = array_merge($p, $visible[1]);
+$t      .= $visible[2];
 
 $rows = db_select(
     "SELECT pe.id AS entry_id, pe.notes, pe.created_at AS added_at,
