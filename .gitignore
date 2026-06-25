@@ -33,3 +33,11 @@ vendor/
 
 # Production deploy bundle (regenerated from this repo, not stored in it)
 build/
+
+# Database dumps — never commit (PII + secrets)
+*.sql
+!sql/*.sql
+csf_portal_dump.sql
+
+# Ad-hoc live-DB debug scripts (db_setup.php / db_verify.php / db_dept_check.php /
+# db_fix_seed_hashes.php / sql/fix-seed-hashes.php are intentionally tracked)
