@@ -49,7 +49,14 @@ if (session_status() === PHP_SESSION_NONE) {
         'domain'   => '',
         'secure'   => $secure,
         'httponly' => true,
-        'samesite' => 'Strict',
+        // Lax instead of Strict: Strict breaks same-origin form POSTs in
+        // several real-world scenarios (browser back-button cache, top-level
+        // navigation that initiated outside the site, some proxy setups
+        // like DigitalOcean App Platform edge). Lax still blocks CSRF for
+        // cross-site requests (POSTs from <form> on attacker.com) while
+        // allowing same-origin navigations to carry the session cookie.
+        // For a college admin portal this is the right trade-off.
+        'samesite' => 'Lax',
     ]);
     ini_set('session.use_strict_mode', '1');
     ini_set('session.gc_maxlifetime', '1800');
