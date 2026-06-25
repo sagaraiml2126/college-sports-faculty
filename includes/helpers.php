@@ -169,8 +169,20 @@ function initials(string $name): string
 {
     $parts = preg_split('/\s+/', trim($name));
     $out = '';
-    foreach ($parts as $p) if ($p !== '') $out .= mb_strtoupper(mb_substr($p, 0, 1));
-    return mb_substr($out, 0, 2) ?: '?';
+    foreach ($parts as $p) if ($p !== '') {
+        // mb_* handles Unicode (Devanagari, CJK, etc.) correctly, but the
+        // App Platform PHP runtime doesn't always ship with mbstring. Fall
+        // back to ASCII substr/strtoupper so the sidebar doesn't break.
+        if (function_exists('mb_substr')) {
+            $out .= mb_strtoupper(mb_substr($p, 0, 1));
+        } else {
+            $out .= strtoupper(substr($p, 0, 1));
+        }
+    }
+    if (function_exists('mb_substr')) {
+        return mb_substr($out, 0, 2) ?: '?';
+    }
+    return substr($out, 0, 2) ?: '?';
 }
 
 /**
