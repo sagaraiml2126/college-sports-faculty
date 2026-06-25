@@ -1,0 +1,150 @@
+# Deploying to DigitalOcean
+
+This is the **single source of truth** for taking the local code on `main` to a working live site.
+Follow these steps in order; each step has a one-line check so you know it succeeded before moving on.
+
+---
+
+## 0. Pre-flight: clean local state
+
+```bash
+git status          # must say "nothing to commit, working tree clean"
+git log -1 --oneline
+```
+
+If `git status` is dirty, commit or stash first — never push a half-done working tree.
+
+---
+
+## 1. Push to GitHub
+
+```bash
+git push origin main
+```
+
+If the remote rejects with non-fast-forward, someone else pushed first. Run:
+
+```bash
+git pull --rebase origin main
+git push origin main
+```
+
+---
+
+## 2. One-click schema + seed (live DB)
+
+Open in browser while logged in as SUPER_ADMIN:
+
+```
+https://<your-app>.ondigitalocean.app/db_setup.php
+```
+
+This script:
+- Connects to the managed MySQL using the `DATABASE_URL` (or `DB_*` env vars)
+- Runs every migration in `sql/` in version order
+- Loads `sql/seed.ready.sql` (8 active departments, 4 faculty users, demo data)
+- Prints a green ✅ or red ❌ per migration
+
+**Check:** the page ends with `db_setup: ALL DONE` and zero ❌ rows.
+
+If a migration fails, the script stops at that version. Read the error, fix the SQL, re-run `db_setup.php` — it's idempotent (each migration uses `IF NOT EXISTS` / `INSERT IGNORE` where possible).
+
+---
+
+## 3. Verify schema
+
+```
+https://<your-app>.ondigitalocean.app/db_verify.php
+```
+
+Should print row counts for `faculty`, `departments`, `faculty_departments`, `students`, etc.
+
+**Expected after fresh deploy:**
+- `faculty`: 4+ rows (eng_faculty, poly_faculty, pharm_faculty, dpharm_faculty, plus your super admin)
+- `departments`: 8 active rows
+- `faculty_departments`: 8 rows (eng → engineering/pharmacy/ytc_pharmacy; poly → polytechnic/dpharm; pharm → management/architecture)
+
+If `faculty_departments` is empty, that's why faculty-select.php shows no cards. Re-run `db_setup.php` — v14 + v16 are idempotent.
+
+---
+
+## 4. Force a fresh deploy of the app code
+
+DO App Platform auto-deploys on push to `main`, but it caches aggressively. To guarantee no stale PHP files (e.g. half-deployed `db_fix_live_depts.php` from earlier debugging):
+
+**DO App Platform UI:** Apps → your app → "Force rebuild and deploy".
+
+**Or rsync:** if you deploy manually, run:
+
+```bash
+rsync -avz --delete \
+  --exclude='uploads/' --exclude='.git/' --exclude='*.sql' \
+  ./ user@your-droplet:/var/www/college-sports-faculty/
+```
+
+The `--delete` is critical — it removes files that exist on the server but no longer in the repo (e.g. one-off debug scripts from earlier sessions).
+
+---
+
+## 5. Smoke test (3 URLs, 30 seconds)
+
+| URL | Expected |
+|---|---|
+| `https://<your-app>.ondigitalocean.app/` | Public homepage, no PHP errors, no warnings in browser console |
+| `https://<your-app>.ondigitalocean.app/faculty-login.php` | Login form. Log in as `eng_faculty` / `Faculty@123` |
+| `https://<your-app>.ondigitalocean.app/faculty-select.php` | Shows the 8 department cards with student counts |
+
+If any 500s or "Forbidden" pages appear, check the deploy log; do **not** drop another `db_*.php` debug script at the web root — instead fix the root cause.
+
+---
+
+## 6. Seed faculty passwords (only if you reset the DB)
+
+If you wiped the DB and re-seeded, the documented passwords are:
+
+| User | Password |
+|---|---|
+| super admin | the one you set during bootstrap |
+| eng_faculty | `Faculty@123` |
+| poly_faculty | `Faculty@123` |
+| pharm_faculty | `Faculty@123` |
+| dpharm_faculty | `Faculty@123` |
+
+If a faculty reports "Invalid credentials", their hash drifted. Run `db_fix_seed_hashes.php` (browser) or `php sql/fix-seed-hashes.php` (CLI) to re-hash from the canonical list. Self-deletes on success.
+
+---
+
+## Common live errors and what they actually mean
+
+| Symptom | Real cause | Fix |
+|---|---|---|
+| Faculty-select shows no cards | `faculty_departments` empty for that user (v14/v16 never applied) | Re-run `db_setup.php` — it includes v14 + v16 |
+| "Forbidden." on a form submission | CSRF token expired (30-min idle timeout) | Re-load the page, then submit. Don't sit on a form > 30 min before posting |
+| "Method not allowed." | Hit a POST-only endpoint with GET | Use the form button, not a bookmarked URL |
+| White page / 500 | PHP fatal — check deploy log | Don't add `db_*.php` debug scripts. Use the structured `db_verify.php` instead |
+| Uploaded photos missing | `uploads/students/.htaccess` was wiped during a `--delete` rsync | Re-create: `Require all denied` + PHP handler — see `uploads/students/.htaccess` in repo |
+
+---
+
+## What NOT to do
+
+- **Don't drop one-off `db_*.php` files at the web root** to "fix" a problem. Use the existing helpers (`db_setup.php`, `db_verify.php`, `db_dept_check.php`) — they're documented, committed, and don't pollute the codebase.
+- **Don't edit `sql/migration-v*.sql` files after they've been applied** to a live DB — write a new `migration-vNN.sql` instead. Migrations are append-only.
+- **Don't run `php` commands against the live DB from your laptop** unless you have the credentials in `$_ENV` — use `db_setup.php` from the browser, or `php sql/fix-seed-hashes.php` via SSH on the droplet with the env vars set.
+- **Don't push while `git status` is dirty** — commit or stash first.
+
+---
+
+## File map: what's committed vs. one-time helpers
+
+| File | Purpose | Keep after deploy? |
+|---|---|---|
+| `db_setup.php` | One-click schema + seed load | ✅ Yes — safe to keep, idempotent |
+| `db_verify.php` | Read-only row counts | ✅ Yes — read-only, no side effects |
+| `db_dept_check.php` | Show departments / faculty / faculty_departments mapping | ✅ Yes — read-only |
+| `db_fix_seed_hashes.php` | Re-hash all faculty passwords to documented ones | ✅ Yes — self-deletes after run |
+| `sql/fix-seed-hashes.php` | CLI twin of the above | ✅ Yes |
+| `sql/migration-v*.sql` | Schema changes (append-only) | ✅ Yes — part of the schema |
+| `sql/seed.sql`, `sql/seed.ready.sql` | Reference seeds | ✅ Yes |
+| Anything `db_*.php` not in this list | One-off debug | ❌ Delete on sight, add to `.gitignore` |
+| `csf_portal_dump.sql` | Local DB dump | ❌ Already in `.gitignore`, never commit |
