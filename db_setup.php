@@ -119,8 +119,10 @@ if (!empty($check)) {
 $sqlDir = __DIR__ . '/sql';
 $files  = [
     // Base schema + seed data
+    // NOTE: seed.sql and seed.ready.sql are duplicate content — pick one.
+    // seed.ready.sql is the canonical production seed; seed.sql is the older
+    // demo seed. Running both causes duplicate-key errors on uq_dept_code.
     'schema.sql',
-    'seed.sql',
     'seed.ready.sql',
     // All migrations in version order
     'migration-v2.sql',
